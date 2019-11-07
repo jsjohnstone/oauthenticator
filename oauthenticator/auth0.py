@@ -30,10 +30,12 @@ jupyterhub_config.py :
 
 import json
 import os
+import pwd
 
 from tornado.auth import OAuth2Mixin
 from tornado import web
 from tornado.httpclient import HTTPRequest, AsyncHTTPClient
+from tornado.web import HTTPError
 
 from jupyterhub.auth import LocalAuthenticator
 
@@ -92,6 +94,19 @@ class Auth0OAuthenticator(OAuthenticator):
                           )
         resp = await http_client.fetch(req)
         resp_json = json.loads(resp.body.decode('utf8', 'replace'))
+        
+        # Check if user profile has email specified
+        if "email" not in resp_json.keys():
+             raise HTTPError(403,"Auth0 didn't respond with an email address. Check your scopes are set correctly.") 
+             return()
+
+        # Check if user exists on system
+        try:
+            pwd.getpwnam(resp_json["email"])
+        except KeyError:
+            raise HTTPError(403,"System user does not exist for {}.".format(resp_json["email"]))
+            return()
+
 
         return {
             'name': resp_json["email"],
